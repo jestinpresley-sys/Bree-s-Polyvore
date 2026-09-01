@@ -22,23 +22,63 @@ import { aiRemoveBackground, hasEmbeddedModel } from './ai-cutout.js';
   }
 
   // ---------------- storage ----------------
+  // Cloud sync (Supabase) keeps boards available across devices; localStorage
+  // is always kept as an offline-first cache so the app still works with no
+  // connection (and works at all when no Supabase project is configured).
   const STORAGE_KEY = 'cuttingTable.boards';
-  async function loadBoards(){
+  const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+  const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+  const BOARD_ROW_ID = 'bree';
+  const cloudEnabled = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
+
+  function readLocalBoards(){
     try{
       const raw = localStorage.getItem(STORAGE_KEY);
-      if(!raw) return [];
-      const arr = JSON.parse(raw);
+      const arr = raw ? JSON.parse(raw) : [];
       return Array.isArray(arr) ? arr : [];
     }catch(err){
       return [];
     }
   }
+  function writeLocalBoards(list){
+    try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(list)); return true; }
+    catch(err){ return false; }
+  }
+
+  async function loadBoards(){
+    if(cloudEnabled){
+      try{
+        const res = await fetch(
+          `${SUPABASE_URL}/rest/v1/boards?id=eq.${BOARD_ROW_ID}&select=data`,
+          { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } }
+        );
+        if(res.ok){
+          const rows = await res.json();
+          const cloudList = rows[0] && Array.isArray(rows[0].data) ? rows[0].data : null;
+          if(cloudList){ writeLocalBoards(cloudList); return cloudList; }
+        }
+      }catch(err){ /* offline or unreachable — fall back to local cache */ }
+    }
+    return readLocalBoards();
+  }
+
   async function saveBoards(list){
+    const localOk = writeLocalBoards(list);
+    if(!cloudEnabled) return localOk;
     try{
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
-      return true;
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/boards?on_conflict=id`, {
+        method: 'POST',
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json',
+          Prefer: 'resolution=merge-duplicates',
+        },
+        body: JSON.stringify({ id: BOARD_ROW_ID, data: list, updated_at: new Date().toISOString() }),
+      });
+      return res.ok || localOk;
     }catch(err){
-      return false;
+      return localOk;
     }
   }
 

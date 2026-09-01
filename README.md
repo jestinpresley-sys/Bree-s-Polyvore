@@ -78,6 +78,37 @@ the slower `prepare-assets` + `build` step.
   dependency on any of this, so the app is never left without a working
   background-remove option.
 
+## Cross-device board sync (optional)
+
+By default, saved boards live only in that browser's `localStorage` — fine
+for one device, gone if she clears browser data or switches phones. To make
+boards follow her across devices, wire up a free Supabase project:
+
+1. Create a project at [supabase.com](https://supabase.com) (free tier).
+2. In the SQL editor, run:
+   ```sql
+   create table boards (
+     id text primary key,
+     data jsonb not null default '[]'::jsonb,
+     updated_at timestamptz not null default now()
+   );
+   alter table boards enable row level security;
+   create policy "anon read" on boards for select using (true);
+   create policy "anon write" on boards for insert with check (true);
+   create policy "anon update" on boards for update using (true);
+   ```
+3. In Project Settings → API, copy the **Project URL** and **anon public**
+   key.
+4. Copy `.env.example` to `.env` and fill in those two values.
+5. `npm run dev` (or rebuild) — boards now sync to Supabase automatically,
+   still falling back to the local copy when offline.
+
+This is unauthenticated by design (no login for her to deal with) — anyone
+with the URL and anon key could read/write that table, which is an
+acceptable trade for a single-friend, non-sensitive use case. Don't reuse
+this table/project for anything more sensitive later without adding real
+auth.
+
 ## Changing the model size/quality
 
 Edit `MODEL` in `scripts/fetch-assets.mjs`:
