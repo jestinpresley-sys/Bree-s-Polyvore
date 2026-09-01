@@ -163,9 +163,31 @@
 
   @keyframes rise{ from{ opacity:0; transform:translateY(8px); } to{ opacity:1; transform:translateY(0); } }
   @media (prefers-reduced-motion: reduce){ *{ animation:none !important; transition:none !important; } }
+
+  /* ---- Lock screen ---- */
+  .lock-overlay{ position:fixed; inset:0; background:var(--paper); background-image: radial-gradient(circle, rgba(42,38,34,0.08) 1px, transparent 1px); background-size:20px 20px; display:flex; align-items:center; justify-content:center; z-index:3000; padding:20px; }
+  .lock-card{ background:var(--canvas); border:1px solid var(--line); border-radius:8px; box-shadow:var(--shadow); width:100%; max-width:340px; padding:28px; text-align:center; animation: rise .4s ease both; }
+  .lock-card h1{ font-family:var(--font-display); font-style:italic; font-weight:600; font-size:24px; margin:0 0 4px; }
+  .lock-card p{ font-family:var(--font-mono); font-size:11.5px; color:var(--muted); margin:0 0 20px; line-height:1.6; }
+  .lock-input{ width:100%; font-family:var(--font-body); font-size:15px; padding:11px 14px; border:1px solid var(--line); border-radius:20px; background:transparent; color:var(--ink); text-align:center; margin-bottom:12px; }
+  .lock-input:focus{ outline:none; border-color:var(--accent); }
+  .lock-error{ font-size:12px; color:var(--accent); min-height:16px; margin-bottom:8px; }
+  .lock-overlay[hidden]{ display:none; }
 </style>
 </head>
 <body>
+
+<div class="lock-overlay" id="lockOverlay">
+  <div class="lock-card">
+    <h1>Cutting Table</h1>
+    <p>Enter the passcode to open your boards.</p>
+    <form id="lockForm">
+      <input type="password" id="lockInput" class="lock-input" placeholder="Passcode" autocomplete="off" autocapitalize="off" spellcheck="false">
+      <div class="lock-error" id="lockError"></div>
+      <button type="submit" class="btn btn-accent btn-block">Unlock</button>
+    </form>
+  </div>
+</div>
 
 <div id="app">
   <header class="topbar">
