@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cutting Table (AI)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,600;0,700;1,500;1,600&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+
+  :root{
+    --paper:#EDE7D8;
+    --ink:#2A2622;
+    --canvas:#FFFDF8;
+    --accent:#C23B33;
+    --accent-blue:#7C93A0;
+    --brass:#A9812F;
+    --muted:#8B8478;
+    --line: rgba(42,38,34,0.18);
+    --shadow: 0 10px 30px rgba(42,38,34,0.12);
+    --radius: 4px;
+    --font-display: 'Fraunces', Georgia, 'Times New Roman', serif;
+    --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-mono: 'IBM Plex Mono', 'SFMono-Regular', Menlo, Consolas, monospace;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ height:100%; }
+  body{
+    margin:0;
+    font-family:var(--font-body);
+    color:var(--ink);
+    background-color:var(--paper);
+    background-image: radial-gradient(circle, rgba(42,38,34,0.08) 1px, transparent 1px);
+    background-size: 20px 20px;
+    min-height:100vh;
+  }
+  [hidden]{ display:none !important; }
+  button{ font-family:inherit; }
+
+  #app{ max-width:1100px; margin:0 auto; padding:28px 18px 70px; }
+
+  .topbar{ display:flex; align-items:baseline; justify-content:space-between; flex-wrap:wrap; gap:14px; margin-bottom:24px; animation: rise .5s ease both; }
+  .wordmark{ font-family:var(--font-display); font-style:italic; font-weight:600; font-size:clamp(26px,4vw,36px); letter-spacing:-0.01em; color:var(--ink); margin:0; line-height:1.1; }
+  .wordmark small{ display:block; font-family:var(--font-mono); font-style:normal; font-weight:400; font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); margin-top:4px; }
+  .tabs{ display:flex; gap:4px; background:rgba(42,38,34,0.07); padding:4px; border-radius:20px; }
+  .tab{ font-family:var(--font-mono); font-size:12px; letter-spacing:.08em; text-transform:uppercase; padding:9px 18px; border-radius:16px; border:none; background:transparent; color:var(--muted); cursor:pointer; transition: background .18s ease, color .18s ease, box-shadow .18s ease; }
+  .tab.active{ background:var(--canvas); color:var(--ink); box-shadow:0 2px 8px rgba(42,38,34,.15); }
+  .tab:focus-visible{ outline:2px solid var(--accent-blue); outline-offset:2px; }
+
+  .view{ display:none; }
+  .view.active{ display:block; }
+
+  /* ---- Make view ---- */
+  .make-layout{ display:grid; grid-template-columns:220px 1fr; gap:22px; align-items:start; }
+  @media (max-width:760px){ .make-layout{ grid-template-columns:1fr; } }
+
+  .tray-panel{ background:var(--canvas); border:1px solid var(--line); border-radius:var(--radius); padding:16px; box-shadow:var(--shadow); animation: rise .5s ease both; }
+  .tray-panel h2{ font-family:var(--font-mono); font-size:11px; text-transform:uppercase; letter-spacing:.12em; color:var(--muted); margin:0 0 12px; }
+
+  .btn{ font-family:var(--font-body); font-weight:600; font-size:13px; padding:10px 18px; border-radius:20px; border:1px solid var(--ink); background:var(--ink); color:var(--canvas); cursor:pointer; transition: transform .12s ease, opacity .12s ease; white-space:nowrap; }
+  .btn:active{ transform:translateY(1px); }
+  .btn:focus-visible{ outline:2px solid var(--accent-blue); outline-offset:2px; }
+  .btn-outline{ background:transparent; color:var(--ink); }
+  .btn-accent{ background:var(--accent); border-color:var(--accent); color:#fff; }
+  .btn-ghost{ background:transparent; border-color:var(--line); color:var(--ink); font-weight:500; }
+  .btn-danger-ghost{ background:transparent; border-color:var(--line); color:var(--accent); font-weight:500; }
+  .btn-danger-ghost.confirming{ background:var(--accent); color:#fff; border-color:var(--accent); }
+  .btn-block{ width:100%; }
+
+  .upload-hint{ font-size:12px; color:var(--muted); line-height:1.5; margin:10px 0 0; }
+
+  .tray-grid{ display:grid; grid-template-columns:repeat(2,1fr); gap:8px; margin-top:14px; max-height:440px; overflow-y:auto; }
+  @media (max-width:760px){ .tray-grid{ grid-auto-flow:column; grid-template-columns:none; grid-auto-columns:82px; grid-template-rows:82px; overflow-x:auto; overflow-y:hidden; padding-bottom:4px; } }
+  .clip-thumb{ position:relative; aspect-ratio:1; border:1px dashed var(--line); border-radius:3px; overflow:hidden; cursor:pointer; background:#fff; transition: border-color .15s ease, transform .15s ease; padding:0; }
+  .clip-thumb:hover{ border-color:var(--accent); transform:translateY(-2px); }
+  .clip-thumb:focus-visible{ outline:2px solid var(--accent-blue); outline-offset:2px; }
+  .clip-thumb img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .clip-cut{ position:absolute; bottom:3px; left:3px; width:20px; height:20px; border-radius:50%; background:rgba(42,38,34,.78); color:#fff; border:none; font-size:11px; display:flex; align-items:center; justify-content:center; cursor:pointer; padding:0; opacity:0; transition:opacity .15s ease; }
+  .clip-thumb:hover .clip-cut, .clip-thumb:focus-within .clip-cut{ opacity:1; }
+  @media (hover:none){ .clip-cut{ opacity:1; } }
+  .tray-empty{ font-size:12.5px; color:var(--muted); line-height:1.6; padding:10px 2px; }
+
+  .board-panel{ display:flex; flex-direction:column; gap:14px; animation: rise .6s ease .05s both; }
+  .board-toolbar{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .board-name-input{ font-family:var(--font-display); font-style:italic; font-size:19px; border:none; border-bottom:1px dashed var(--line); background:transparent; padding:6px 2px; flex:1; min-width:160px; color:var(--ink); }
+  .board-name-input::placeholder{ color:var(--muted); opacity:.75; font-style:italic; }
+  .board-name-input:focus{ outline:none; border-bottom-color:var(--accent); }
+  .toolbar-spacer{ flex:1 1 auto; min-width:0; }
+  .toolbar-actions{ display:flex; gap:8px; flex-wrap:wrap; }
+
+  .canvas-wrap{ display:flex; justify-content:center; }
+  .canvas-board{
+    position:relative; width:100%; max-width:520px; aspect-ratio:4/5;
+    background:var(--canvas); border:2px dashed rgba(42,38,34,.35); border-radius:6px;
+    box-shadow:var(--shadow); overflow:hidden;
+  }
+  .pin{ position:absolute; width:8px; height:8px; border-radius:50%; background:var(--brass); box-shadow:0 1px 2px rgba(0,0,0,.35); z-index:1; }
+  .pin.tl{ top:9px; left:9px; } .pin.tr{ top:9px; right:9px; } .pin.bl{ bottom:9px; left:9px; } .pin.br{ bottom:9px; right:9px; }
+
+  .canvas-empty-hint{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; text-align:center; padding:34px; font-family:var(--font-mono); font-size:12.5px; line-height:1.7; color:var(--muted); pointer-events:none; }
+
+  .collage-item{ position:absolute; touch-action:none; cursor:grab; }
+  .collage-item img{ width:100%; height:100%; object-fit:contain; display:block; pointer-events:none; user-select:none; -webkit-user-drag:none; filter: drop-shadow(0 4px 8px rgba(42,38,34,.2)); }
+  .collage-item:active{ cursor:grabbing; }
+  .collage-item .item-del, .collage-item .item-resize, .collage-item .item-rotate-wrap, .collage-item .item-cut{ opacity:0; pointer-events:none; transition:opacity .12s ease; }
+  .collage-item.selected{ outline:2px dashed var(--accent); outline-offset:6px; }
+  .collage-item.selected .item-del, .collage-item.selected .item-resize, .collage-item.selected .item-rotate-wrap, .collage-item.selected .item-cut{ opacity:1; pointer-events:auto; }
+
+  .item-del{ position:absolute; top:-10px; right:-10px; width:20px; height:20px; border-radius:50%; background:var(--accent); color:#fff; border:2px solid var(--canvas); font-size:14px; line-height:1; display:flex; align-items:center; justify-content:center; cursor:pointer; padding:0; }
+  .item-cut{ position:absolute; top:-10px; left:-10px; width:20px; height:20px; border-radius:50%; background:var(--accent-blue); color:#fff; border:2px solid var(--canvas); font-size:11px; line-height:1; display:flex; align-items:center; justify-content:center; cursor:pointer; padding:0; }
+  .item-resize{ position:absolute; bottom:-7px; right:-7px; width:13px; height:13px; background:var(--brass); border:2px solid var(--canvas); border-radius:3px; cursor:nwse-resize; }
+  .item-rotate-wrap{ position:absolute; top:-30px; left:50%; transform:translateX(-50%); width:1px; height:22px; border-left:1px dashed var(--accent-blue); }
+  .item-rotate{ position:absolute; top:-8px; left:-7px; width:14px; height:14px; border-radius:50%; background:var(--accent-blue); border:2px solid var(--canvas); cursor:grab; }
+
+  /* ---- Clip-background modal ---- */
+  .cutout-overlay{ position:fixed; inset:0; background:rgba(42,38,34,.55); display:flex; align-items:center; justify-content:center; z-index:2000; padding:20px; }
+  .cutout-card{ background:var(--canvas); border-radius:8px; box-shadow:var(--shadow); width:100%; max-width:420px; padding:22px; animation: rise .3s ease both; }
+  .cutout-card h3{ font-family:var(--font-display); font-style:italic; font-weight:600; font-size:21px; margin:0 0 6px; }
+  .cutout-hint{ font-size:12.5px; color:var(--muted); margin:0 0 14px; line-height:1.5; }
+  .cutout-preview-wrap{ position:relative; width:100%; aspect-ratio:1; border:1px dashed var(--line); border-radius:6px; overflow:hidden; background-image: repeating-conic-gradient(#e6e0d2 0% 25%, #f7f3e9 0% 50%); background-size:16px 16px; display:flex; align-items:center; justify-content:center; margin-bottom:16px; }
+  .cutout-preview-wrap img{ max-width:100%; max-height:100%; object-fit:contain; }
+  .cutout-loading{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-family:var(--font-mono); font-size:12px; color:var(--muted); background:rgba(255,253,248,.75); }
+  .cutout-mode-row{ display:flex; gap:6px; background:rgba(42,38,34,.07); padding:4px; border-radius:16px; margin-bottom:14px; }
+  .cutout-mode-btn{ flex:1; font-family:var(--font-mono); font-size:11px; letter-spacing:.06em; text-transform:uppercase; padding:8px 10px; border-radius:12px; border:none; background:transparent; color:var(--muted); cursor:pointer; transition: background .15s ease, color .15s ease; }
+  .cutout-mode-btn.active{ background:var(--canvas); color:var(--ink); box-shadow:0 2px 6px rgba(42,38,34,.15); }
+  .cutout-mode-btn:focus-visible{ outline:2px solid var(--accent-blue); outline-offset:2px; }
+  .cutout-slider-row{ display:flex; align-items:center; gap:12px; margin-bottom:20px; }
+  .cutout-slider-row label{ font-family:var(--font-mono); font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); white-space:nowrap; }
+  .cutout-slider-row input[type=range]{ flex:1; accent-color:var(--accent); }
+  .cutout-actions{ display:flex; gap:10px; justify-content:flex-end; }
+
+  /* ---- Boards view ---- */
+  .boards-header{ display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; flex-wrap:wrap; gap:10px; }
+  .boards-header h2{ font-family:var(--font-mono); font-size:11px; text-transform:uppercase; letter-spacing:.12em; color:var(--muted); margin:0; }
+  .boards-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:20px; }
+  .board-card{ background:var(--canvas); border:1px solid var(--line); border-radius:var(--radius); overflow:hidden; box-shadow:var(--shadow); display:flex; flex-direction:column; transition: transform .15s ease; }
+  .board-card:hover{ transform:translateY(-3px); }
+  .board-preview{ position:relative; width:100%; aspect-ratio:4/5; background: repeating-linear-gradient(45deg, rgba(42,38,34,.045) 0 10px, transparent 10px 20px); border-bottom:1px dashed var(--line); overflow:hidden; }
+  .board-preview img{ position:absolute; object-fit:contain; filter: drop-shadow(0 2px 4px rgba(42,38,34,.18)); }
+  .board-preview-empty{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-family:var(--font-mono); font-size:11px; color:var(--muted); }
+  .board-meta{ padding:12px 14px 2px; }
+  .board-name{ font-family:var(--font-display); font-style:italic; font-weight:600; font-size:16px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .board-date{ font-family:var(--font-mono); font-size:10.5px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; margin-top:3px; }
+  .board-actions{ display:flex; gap:8px; padding:12px 14px 14px; margin-top:auto; }
+  .board-actions .btn{ flex:1; padding:8px 6px; font-size:12px; border-radius:16px; text-align:center; }
+  .gallery-empty{ font-family:var(--font-mono); font-size:13px; color:var(--muted); text-align:center; line-height:1.8; padding:60px 20px; border:2px dashed var(--line); border-radius:6px; }
+  .gallery-loading{ text-align:center; padding:50px; font-family:var(--font-mono); font-size:12px; color:var(--muted); }
+
+  .toast{ position:fixed; left:50%; bottom:24px; transform:translateX(-50%) translateY(10px); background:var(--ink); color:var(--canvas); font-family:var(--font-body); font-size:13px; padding:12px 22px; border-radius:24px; opacity:0; transition:opacity .25s ease, transform .25s ease; box-shadow:var(--shadow); z-index:1000; max-width:90vw; text-align:center; }
+  .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+
+  @keyframes rise{ from{ opacity:0; transform:translateY(8px); } to{ opacity:1; transform:translateY(0); } }
+  @media (prefers-reduced-motion: reduce){ *{ animation:none !important; transition:none !important; } }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <header class="topbar">
+    <h1 class="wordmark">Cutting Table<small>Pin your look together</small></h1>
+    <nav class="tabs" role="tablist" aria-label="Views">
+      <button class="tab active" id="tabMake" role="tab" aria-selected="true" type="button">Make</button>
+      <button class="tab" id="tabBoards" role="tab" aria-selected="false" type="button">Boards</button>
+    </nav>
+  </header>
+
+  <main id="view-make" class="view active">
+    <div class="make-layout">
+      <section class="tray-panel">
+        <h2>Clippings</h2>
+        <button class="btn btn-block" id="uploadBtn" type="button">Add photos</button>
+        <p class="upload-hint">Photos on a plain background pin together best. Tap a clipping to add it to the board.</p>
+        <div class="tray-grid" id="tray"></div>
+      </section>
+
+      <section class="board-panel">
+        <div class="board-toolbar">
+          <input type="text" id="nameInput" class="board-name-input" placeholder="Untitled board" maxlength="60" aria-label="Board name">
+          <div class="toolbar-spacer"></div>
+          <div class="toolbar-actions">
+            <button class="btn btn-outline" id="newBoardBtn" type="button">New board</button>
+            <button class="btn btn-accent" id="saveBtn" type="button">Save board</button>
+          </div>
+        </div>
+        <div class="canvas-wrap">
+          <div class="canvas-board" id="canvasBoard">
+            <span class="pin tl"></span><span class="pin tr"></span><span class="pin bl"></span><span class="pin br"></span>
+            <div class="canvas-empty-hint" id="canvasEmptyHint">Tap a clipping on the left to pin it here.<br>Drag, resize, and spin pieces to build the look.</div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <main id="view-boards" class="view">
+    <div class="boards-header">
+      <h2>Saved boards</h2>
+    </div>
+    <div id="galleryContent"></div>
+  </main>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+<input type="file" id="fileInput" accept="image/*" multiple hidden>
+
+<div class="cutout-overlay" id="cutoutModal" hidden>
+  <div class="cutout-card" role="dialog" aria-modal="true" aria-labelledby="cutoutTitle">
+    <h3 id="cutoutTitle">Clip the background</h3>
+    <p class="cutout-hint" id="cutoutHint">Uses the built-in AI model.</p>
+    <div class="cutout-mode-row" id="cutoutModeRow">
+      <button type="button" class="cutout-mode-btn active" data-mode="ai" id="cutoutModeAi">AI cutout</button>
+      <button type="button" class="cutout-mode-btn" data-mode="quick" id="cutoutModeQuick">Quick cutout</button>
+    </div>
+    <div class="cutout-preview-wrap">
+      <img id="cutoutPreview" alt="Preview with background clipped">
+      <div class="cutout-loading" id="cutoutLoading" hidden>Processing&hellip;</div>
+    </div>
+    <div class="cutout-slider-row" id="cutoutSliderRow" style="display:none;">
+      <label for="cutoutSlider">Sensitivity</label>
+      <input type="range" id="cutoutSlider" min="0" max="100" value="35">
+    </div>
+    <div class="cutout-actions">
+      <button type="button" class="btn btn-ghost" id="cutoutCancelBtn">Cancel</button>
+      <button type="button" class="btn btn-accent" id="cutoutApplyBtn">Apply</button>
+    </div>
+  </div>
+</div>
+
+
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,20 @@
+{
+  "name": "cutting-table-ai",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "prepare-assets": "node scripts/fetch-assets.mjs",
+    "build": "npm run prepare-assets && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@imgly/background-removal": "^1.7.0",
+    "onnxruntime-web": "^1.20.1"
+  },
+  "devDependencies": {
+    "vite": "^5.4.0",
+    "vite-plugin-singlefile": "^2.0.3"
+  }
+}
