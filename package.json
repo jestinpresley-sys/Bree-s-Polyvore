@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "prepare-assets": "node scripts/fetch-assets.mjs",
-    "build": "npm run prepare-assets && vite build",
+    "build": "npm run prepare-assets && node scripts/patch-onnxruntime.mjs && node --max-old-space-size=6144 node_modules/vite/bin/vite.js build",
     "preview": "vite preview"
   },
   "dependencies": {

@@ -9,7 +9,8 @@ function base64ToBytes(base64) {
 
 function mimeFor(filename) {
   if (filename.endsWith('.wasm')) return 'application/wasm';
-  if (filename.endsWith('.onnx')) return 'application/octet-stream';
+  if (filename.endsWith('.json')) return 'application/json';
+  // Content-hashed model/runtime chunk files carry no extension.
   return 'application/octet-stream';
 }
 

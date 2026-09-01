@@ -61,27 +61,48 @@ function extractTgz(tgzPath, destDir) {
   }
 }
 
+// The package no longer ships plain named .onnx/.wasm files. Instead
+// `dist/resources.json` is a manifest mapping logical resource keys (like
+// "/models/isnet_quint8") to a list of content-hashed chunk files that sit
+// flat in `dist/`, which the library reassembles itself at runtime by
+// re-fetching "resources.json" plus each chunk by its hash filename (see
+// `loadAsBlob` in the library source). So instead of embedding named model
+// files, we embed the manifest itself plus exactly the chunks it references
+// for the resources we actually use — the onnxruntime-web wasm runtime
+// (non-WebGPU variant, since ai-cutout.js never sets `device: "gpu"`) and
+// the chosen model tier.
+const REQUIRED_RESOURCE_KEYS = model => [
+  '/onnxruntime-web/ort-wasm-simd-threaded.wasm',
+  '/onnxruntime-web/ort-wasm-simd-threaded.mjs',
+  `/models/${model}`,
+];
+
 async function collectAssetFiles(distDir, model) {
-  const entries = await readdir(distDir, { withFileTypes: true });
-  const files = entries.filter(e => e.isFile()).map(e => e.name);
-
-  const wasmFiles = files.filter(f => f.endsWith('.wasm'));
-  // Grab every onnx file matching the chosen model tier, plus a bare
-  // "model.onnx" fallback some versions ship instead of a suffixed name.
-  const onnxFiles = files.filter(
-    f => f.endsWith('.onnx') && (f.includes(model) || f === 'model.onnx')
-  );
-
-  if (onnxFiles.length === 0) {
-    console.warn(
-      `Warning: no .onnx file matched model "${model}" in ${distDir}.\n` +
-      `Files found: ${files.join(', ')}\n` +
-      `Falling back to embedding every .onnx file found (larger output).`
+  const manifestPath = path.join(distDir, 'resources.json');
+  if (!existsSync(manifestPath)) {
+    const entries = await readdir(distDir, { withFileTypes: true });
+    throw new Error(
+      `Expected dist/resources.json but it's missing.\n` +
+      `Files found: ${entries.map(e => e.name).join(', ')}`
     );
-    onnxFiles.push(...files.filter(f => f.endsWith('.onnx')));
+  }
+  const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+
+  const chunkNames = new Set();
+  for (const key of REQUIRED_RESOURCE_KEYS(model)) {
+    const entry = manifest[key];
+    if (!entry) {
+      throw new Error(
+        `Resource "${key}" not found in resources.json.\n` +
+        `Available keys: ${Object.keys(manifest).join(', ')}`
+      );
+    }
+    for (const chunk of entry.chunks) chunkNames.add(chunk.name);
   }
 
-  return [...wasmFiles, ...onnxFiles];
+  // "resources.json" itself must be embedded too — the library fetches it
+  // at runtime to look up chunk hashes before it can fetch the chunks.
+  return ['resources.json', ...chunkNames];
 }
 
 async function main() {
@@ -90,21 +111,29 @@ async function main() {
   const version = readPkgVersion('@imgly/background-removal');
   console.log(`@imgly/background-removal version: ${version}`);
 
-  if (existsSync(TMP_DIR)) await rm(TMP_DIR, { recursive: true, force: true });
   mkdirSync(TMP_DIR, { recursive: true });
-
-  const tgzUrl = `https://staticimgly.com/@imgly/background-removal-data/${version}/package.tgz`;
-  const tgzPath = path.join(TMP_DIR, 'package.tgz');
-  await downloadFile(tgzUrl, tgzPath);
-
-  extractTgz(tgzPath, TMP_DIR);
-
   const distDir = path.join(TMP_DIR, 'package', 'dist');
-  if (!existsSync(distDir)) {
-    throw new Error(
-      `Expected ${distDir} after extraction but it's missing. ` +
-      `The archive layout may have changed — check ${TMP_DIR} by hand.`
-    );
+  const tgzPath = path.join(TMP_DIR, 'package.tgz');
+
+  // This archive is ~285MB — skip the download/extract if a previous run
+  // already fetched it (e.g. you're re-running after fixing a filename
+  // mismatch). Delete .assets-tmp by hand to force a clean re-fetch.
+  if (existsSync(distDir)) {
+    console.log(`Reusing already-extracted archive at ${distDir}`);
+  } else {
+    const tgzUrl = `https://staticimgly.com/@imgly/background-removal-data/${version}/package.tgz`;
+    if (!existsSync(tgzPath)) {
+      await downloadFile(tgzUrl, tgzPath);
+    } else {
+      console.log(`Reusing already-downloaded ${tgzPath}`);
+    }
+    extractTgz(tgzPath, TMP_DIR);
+    if (!existsSync(distDir)) {
+      throw new Error(
+        `Expected ${distDir} after extraction but it's missing. ` +
+        `The archive layout may have changed — check ${TMP_DIR} by hand.`
+      );
+    }
   }
 
   const assetFiles = await collectAssetFiles(distDir, MODEL);

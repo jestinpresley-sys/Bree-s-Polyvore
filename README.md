@@ -13,17 +13,6 @@ The build embeds the model and WASM runtime directly into one HTML file
 as base64, so the **person you hand it to needs no internet, no install,
 nothing** — just double-click it, same as the plain single-file version.
 
-## Important: I haven't run this build myself
-
-I wrote this from `@imgly/background-removal`'s published documentation,
-not from a live test — my environment has no internet access, so I
-couldn't run `npm install` or actually produce the final file myself.
-You're the first real test of this pipeline. It's built defensively
-(the asset-fetching script discovers filenames dynamically rather than
-hardcoding them, and the app falls back to Quick cutout automatically if
-AI cutout fails to load), but something may still need a tweak on your
-end. See **If something breaks** below.
-
 ## Build steps (needs internet — do this on your own machine)
 
 ```bash
@@ -31,16 +20,30 @@ npm install
 npm run build
 ```
 
-`npm run build` does two things:
+`npm run build` does three things:
 
 1. `prepare-assets` — downloads the real ONNX model + WASM runtime files
-   (~40MB for the default "small/quantized" tier) and writes them into
-   `src/embedded-assets.generated.js` as base64.
-2. `vite build` — bundles everything (app code + those embedded assets)
-   into a single file at `dist/index.html`.
+   (~54MB raw for the default "small/quantized" tier — the package now
+   ships them as content-hashed chunks + a `resources.json` manifest
+   rather than plain named files, which the script reassembles) and
+   writes them into `src/embedded-assets.generated.js` as base64.
+2. `patch-onnxruntime.mjs` — neutralizes two large `.wasm` files bundled
+   *inside* `onnxruntime-web` itself that several of its internal loader
+   files reference independently. Vite inlines each reference as its own
+   base64 copy with no deduplication, which without this step bloats the
+   final file to 200MB+ for data that's never actually read (the app
+   always overrides `wasmPaths` to use its own embedded chunks before
+   creating a session). Safe no-op if you don't hit this — see
+   `scripts/patch-onnxruntime.mjs` for the full explanation.
+3. `vite build` — bundles everything (app code + embedded assets) into a
+   single file at `dist/index.html`.
 
-That `dist/index.html` is the file to send your friend. It'll likely be
-somewhere in the 40–60MB range.
+That `dist/index.html` is the file to send your friend — **~78MB**
+(built and verified: AI cutout runs correctly end-to-end from this exact
+file, including the chunk-reconstruction and onnxruntime-web patch).
+`npm run build` already runs Vite with a bumped Node heap
+(`--max-old-space-size=6144`) baked in, since bundling a ~72MB base64
+string blows well past V8's default heap limit and crashes otherwise.
 
 ### Trying it first without the full offline build
 
